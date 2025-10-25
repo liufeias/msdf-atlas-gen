@@ -1086,7 +1086,7 @@ int main(int argc, const char *const *argv) {
             spacing = packingSpacing;
         }
     } else {
-        spacing = -1;// 对于其他类型（SDF, MASK 等），默认间距为 -1（这是打包器内部的一个特殊标志，我们保留它以确保行为一致）。
+        spacing = -1;// 对于其他类型（ MASK 等），默认间距为 -1（这是打包器内部的一个特殊标志，我们保留它以确保行为一致）。
     }
     double uniformOriginX, uniformOriginY;
 
