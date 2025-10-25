@@ -1,0 +1,164 @@
+# ==============================================================================
+# MSDF-Atlas-Gen Windows x86/x64 构建与打包工作流
+# ==============================================================================
+#
+# 功能说明:
+#   - 这个 GitHub Actions 工作流用于在 Windows 环境下自动编译、构建和打包
+#     msdf-atlas-gen 项目的 32位 (x86) 和 64位 (x64) 可执行程序。
+#   - 它被设计为高性能和高健壮性，适合生产环境的自动化需求。
+#
+# 使用方法:
+#   1. 将此文件放置在你的 GitHub 仓库的 .github/workflows/ 目录下。
+#   2. 推送代码到 main/master 分支，或在 Actions 页面手动触发。
+#   3. 构建完成后，在工作流运行结果页面的 "Artifacts" (产物) 部分下载打包好的 zip 文件。
+#
+# ==============================================================================
+
+# 定义工作流的名称，这个名称会显示在 GitHub 仓库的 "Actions" 选项卡中。
+name: '一键构建 Windows 程序 (Build Windows Release)'
+
+# 定义触发此工作流的事件。
+on:
+  # 允许你从 Actions 选项卡手动触发此工作流。这就是“一键打包”功能的核心。
+  workflow_dispatch:
+
+  # 当有代码推送到 'main' 或 'master' 分支时，自动触发此工作流。
+  #push:
+  #  branches: [ "main", "master" ]
+
+# 定义工作流中要运行的任务（jobs）。
+jobs:
+  # 定义一个名为 'build' 的构建任务。
+  build:
+    # 指定运行此任务的虚拟机环境。'windows-latest' 表示使用最新版本的 Windows Server。
+    runs-on: windows-latest
+
+    # 定义构建策略，这里使用 'matrix' (矩阵) 策略。
+    # 矩阵允许我们用不同的配置并行运行同一个任务，这里用于同时构建 x64 和 x86 版本。
+    # 这样做可以显著减少总构建时间，是高性能构建的关键实践。
+    strategy:
+      # 'fail-fast: false' 意味着即使矩阵中的一个任务失败了，其他任务也会继续运行。
+      # 这对于希望尽可能多地获取构建结果的场景非常有用。
+      fail-fast: false
+      matrix:
+        # 定义矩阵的变量。'include' 允许我们定义一组具体的配置组合。
+        include:
+          - arch: 'x64' # 64位架构
+            configurePreset: 'win64'        # 用于 cmake --preset
+            buildPreset: 'win64-rel'        # 用于 cmake --build --preset
+            build-dir: 'win64' # 此变量用于精确匹配 CMakePresets.json 中的构建目录
+            artifact-name: 'msdf-atlas-gen-win-x64' # 打包产物的名称
+            # 明确为 x64 构建指定静态 triplet
+            triplet: 'x64-windows-static'
+          - arch: 'x86' # 32位架构
+            configurePreset: 'win32'        # 用于 cmake --preset
+            buildPreset: 'win32-rel'        # 用于 cmake --build --preset
+            build-dir: 'win32' # 此变量用于精确匹配 CMakePresets.json 中的构建目录
+            artifact-name: 'msdf-atlas-gen-win-x86' # 打包产物的名称
+            # 明确为 x86 构建指定静态 triplet
+            triplet: 'x86-windows-static'
+    # 在 Job 级别设置环境变量，确保所有步骤都能访问
+    env:
+      VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
+
+    # 定义任务中的一系列步骤（steps）。
+    steps:
+      # ------------------------------------------------------------------------
+      # 步骤 1: 检出代码 (Checkout Code)
+      # ------------------------------------------------------------------------
+      # 使用官方的 'actions/checkout' action 来获取仓库的源代码。
+      - name: '检出代码 (Checkout Code)'
+        uses: actions/checkout@v5
+        with:
+          # 'submodules: 'recursive'' 是一个健壮性实践，确保如果项目有子模块，也会一并克隆下来。
+          submodules: 'recursive' 
+
+      # ------------------------------------------------------------------------
+      # 步骤 2: 设置 MSVC 编译环境
+      # ------------------------------------------------------------------------
+      # 根据官方文档，这是设置 MSVC 环境的现代化、且在积极维护的 Action。
+      - name: '设置 MSVC 编译环境 (Setup MSVC)'
+        uses: TheMrMilchmann/setup-msvc-dev@v4
+        with:
+          arch: ${{ matrix.arch }}
+
+      # ------------------------------------------------------------------------
+      # 步骤 3: 设置 vcpkg 环境并缓存依赖
+      # ------------------------------------------------------------------------
+      # 最佳实践: 使用 run-vcpkg 来处理所有 vcpkg 相关任务。
+      # 它会自动处理克隆、引导、二进制缓存，并将 VCPKG_ROOT 注入环境。
+      # 我们不再需要手动的 actions/cache 步骤。
+      - name: '设置 vcpkg 环境并缓存依赖 (Setup vcpkg)'
+        uses: lukka/run-vcpkg@v11
+        with:
+          # 最佳实践: 锁定一个具体的 vcpkg 提交哈希，以确保构建的可复现性和稳定性。
+          vcpkgGitCommitId: c82f74667287d3dc386bce81e44964370c91a289
+          # 注意: 我们没有使用 'runVcpkgInstall: true'，这是推荐的做法。
+          # 依赖项将在下一步的 CMake 配置阶段由 vcpkg 工具链自动安装。
+
+      # ------------------------------------------------------------------------
+      # 步骤 4: 配置 CMake (Configure CMake)
+      # ------------------------------------------------------------------------
+      # 运行 CMake 的配置步骤，生成构建系统文件（例如 Visual Studio 的 .sln 或 Ninja 的 .build 文件）。
+      # 我们使用 '--preset' 参数来直接调用项目预设，这非常方便和可靠。
+      - name: '配置 CMake (Configure & Install Dependencies)'
+        run: cmake --preset ${{ matrix.configurePreset }}
+        # 项目的 CMakePresets.json 已配置为使用 vcpkg 工具链。当 CMake 运行时，
+        # 它会自动调用 vcpkg 来安装 vcpkg.json 中定义的依赖项。
+        # 无需手动设置 VCPKG_ROOT，因为上一步的 run-vcpkg 已经完成。
+        #env:
+        #  VCPKG_ROOT: ${{ github.workspace }}/vcpkg_installed
+
+      # ------------------------------------------------------------------------
+      # 步骤 5: 构建项目 (Build Project)
+      # ------------------------------------------------------------------------
+      # 运行 CMake 的构建步骤，执行实际的编译过程。
+      - name: '构建项目 (Build)'
+        # '--build' 参数告诉 CMake 执行构建。
+        # '--preset' 再次使用预设，它包含了构建目录和配置类型（Release）等信息。
+        # '-j' 参数启用并行编译，利用所有可用的 CPU核心，这是另一个提升性能的关键点。
+        run: cmake --build --preset ${{ matrix.buildPreset }} -j
+      
+      # 调试步骤：检查目录结构
+      - name: '调试 - 检查构建输出'
+        run: |
+          echo "=== 完整的构建目录结构 ==="
+          dir build /s
+          
+          echo "=== 检查预设的构建目录 ==="
+          if exist "build\${{ matrix.build-dir }}" (
+            echo "构建目录存在: build\${{ matrix.build-dir }}"
+            dir "build\${{ matrix.build-dir }}" /s
+          ) else (
+            echo "构建目录不存在: build\${{ matrix.build-dir }}"
+            echo "现有的构建目录:"
+            dir build
+          )
+        shell: cmd
+      
+      # ------------------------------------------------------------------------
+      # 步骤 6: 准备打包文件 (Stage Artifacts)
+      # ------------------------------------------------------------------------
+      # 创建一个临时目录 'artifact'，用于存放所有需要打包的文件。
+      # 这样做可以保持打包内容的干净和一致性。
+      - name: '准备打包文件 (Stage Artifacts)'
+        run: |
+          # 为每个架构创建独立的目录
+          mkdir artifact-${{ matrix.arch }}
+          copy build\${{ matrix.build-dir }}\bin\Release\msdf-atlas-gen.exe artifact-${{ matrix.arch }}\
+          copy LICENSE.txt artifact-${{ matrix.arch }}\
+          copy README.md artifact-${{ matrix.arch }}\
+        shell: cmd # 使用 cmd shell，因为 copy 命令在 Windows 上更直接。
+
+      # ------------------------------------------------------------------------
+      # 步骤 7: 上传构建产物 (Upload Artifacts)
+      # ------------------------------------------------------------------------
+      # 使用 'actions/upload-artifact' action 将 'artifact' 目录中的内容打包成一个 zip 文件并上传。
+      # 上传后，你就可以在工作流运行结果页面下载它。
+      - name: '上传构建产物 (Upload Artifact)'
+        uses: actions/upload-artifact@v4
+        with:
+          # 'name' 定义了上传产物的名称，我们使用矩阵变量来区分 32位 和 64位 版本。
+          name: ${{ matrix.artifact-name }}
+          # 'path' 指定要上传的目录。
+          path: artifact-${{ matrix.arch }}/
