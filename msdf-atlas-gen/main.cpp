@@ -9,6 +9,9 @@
 
 #ifdef MSDF_ATLAS_STANDALONE
 #ifdef _WIN32
+//由于 Windows 头文件中的 min 和 max 宏与 C++ 标准库中的 std::min 和 std::max 函数冲突会导致报错
+//在包含 Windows 头文件之前定义 NOMINMAX，会阻止 Windows.h 定义 min 和 max 宏，从而避免与 C++ 标准库的冲突。
+#define NOMINMAX
 #include <windows.h>
 #endif
 #define _USE_MATH_DEFINES
@@ -416,7 +419,7 @@ static bool makeAtlas(const std::vector<GlyphGeometry> &glyphs, const std::vecto
 int main(int argc, const char *const *argv) {
      // 创建跨平台 UTF-8 控制台管理器
     CrossPlatformUTF8Console consoleManager;
-    
+
     #define ABORT(msg) do { fputs(msg "\n", stderr); return 1; } while (false)
 
     int result = 0;
