@@ -1,6 +1,8 @@
 
 # Multi-channel signed distance field atlas generator
 
+[![一键构建 Windows 程序](https://github.com/liufeias/msdf-atlas-gen/actions/workflows/build-release.yml/badge.svg)](https://github.com/liufeias/msdf-atlas-gen/actions/workflows/build-release.yml)
+
 This is a utility for generating compact font atlases using [MSDFgen](https://github.com/Chlumsky/msdfgen).
 
 The atlas generator loads a subset of glyphs from a TTF or OTF font file, generates a distance field for each of them, and tightly packs them into an atlas bitmap (example below). The finished atlas and/or its layout metadata can be exported as an [Artery Font](https://github.com/Chlumsky/artery-font-format) file, a plain image file, a CSV sheet or a structured JSON file.
