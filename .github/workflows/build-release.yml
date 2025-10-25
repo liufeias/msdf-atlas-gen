@@ -93,13 +93,6 @@ jobs:
         with:
           # 最佳实践: 锁定一个具体的 vcpkg 提交哈希，以确保构建的可复现性和稳定性。
           vcpkgGitCommitId: c82f74667287d3dc386bce81e44964370c91a289
-          # 启用二进制缓存，大幅提升构建速度
-          vcpkgBinaryCache: true
-          # 使用GitHub Actions缓存
-          useVcpkgCache: true       # 安全：只缓存自己构建的依赖
-          vcpkgArtifactCache: false # 禁用：不使用他人构建的二进制
-          # 设置缓存键
-          preCacheKey: vcpkg-${{ matrix.triplet }}-deps
         env:
           # 启用 GitHub Actions 二进制缓存
           VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
