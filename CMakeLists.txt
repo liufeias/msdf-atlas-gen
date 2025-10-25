@@ -1,5 +1,9 @@
 
 cmake_minimum_required(VERSION 3.15)
+# 添加 UTF-8 编码支持
+if(MSVC)
+    add_compile_options(/utf-8)
+endif()
 include(cmake/version.cmake)
 
 option(MSDF_ATLAS_BUILD_STANDALONE "Build the msdf-atlas-gen standalone executable" ON)
