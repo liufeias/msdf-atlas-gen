@@ -95,6 +95,9 @@ R"(
       Selects the format for the atlas image output. Some image formats may be incompatible with embedded output formats.
   -dimensions <width> <height>
       Sets the atlas to have fixed dimensions (width x height).
+  -spacing <pixels>
+      在图集中为每个字形周围添加指定像素的间距。
+      这对于解决纹理采样时因像素插值导致的“边缘溢色”或“灰边”问题至关重要。推荐值为 1 或 2。
   -pots / -potr / -square / -square2 / -square4
       Picks the minimum atlas dimensions that fit all glyphs and satisfy the selected constraint:
       power of two square / ... rectangle / any square / square with side divisible by 2 / ... 4
@@ -386,6 +389,11 @@ int main(int argc, const char *const *argv) {
     const char *imageFormatName = nullptr;
     int fixedWidth = -1, fixedHeight = -1;
     int fixedCellWidth = -1, fixedCellHeight = -1;
+
+    // 添加一个变量来存储从命令行解析的间距值。
+    // 初始化为 -1 表示用户没有通过命令行指定该值。
+    int packingSpacing = -1;
+
     config.preprocessGeometry = (
         #ifdef MSDFGEN_USE_SKIA
             true
@@ -568,6 +576,14 @@ int main(int argc, const char *const *argv) {
             if (!(parseUnsigned(w, argv[argPos++]) && parseUnsigned(h, argv[argPos++]) && w && h))
                 ABORT("Invalid atlas dimensions. Use -dimensions <width> <height> with two positive integers.");
             fixedWidth = w, fixedHeight = h;
+            continue;
+        }
+        // 添加对新的 -spacing 参数的解析逻辑
+        ARG_CASE("-spacing", 1) {// 如果当前参数是 -spacing，且后面还有至少1个参数（防止越界）
+            unsigned s;
+            if (!(parseUnsigned(s, argv[argPos++])))
+                ABORT("无效的间距参数。请使用 -spacing <pixels> 并提供一个非负整数。");
+            packingSpacing = s;
             continue;
         }
         ARG_CASE("-pots", 0) {
@@ -1062,7 +1078,16 @@ int main(int argc, const char *const *argv) {
         config.imageFormat == ImageFormat::BINARY_FLOAT_BE
     );
     // TODO: In this case (if spacing is -1), the border pixels of each glyph are black, but still computed. For floating-point output, this may play a role.
-    int spacing = config.imageType == ImageType::MSDF || config.imageType == ImageType::MTSDF ? 0 : -1;
+    int spacing;
+    if (config.imageType == ImageType::SDF ||config.imageType == ImageType::MSDF || config.imageType == ImageType::MTSDF) {
+        spacing = 0;// 对于SDF、MSDF 和 MTSDF，默认间距为 0。
+        if (packingSpacing > 0) {
+            // 如果用户通过命令行明确指定了间距，则使用用户提供的值。
+            spacing = packingSpacing;
+        }
+    } else {
+        spacing = -1;// 对于其他类型（SDF, MASK 等），默认间距为 -1（这是打包器内部的一个特殊标志，我们保留它以确保行为一致）。
+    }
     double uniformOriginX, uniformOriginY;
 
     // Load fonts
